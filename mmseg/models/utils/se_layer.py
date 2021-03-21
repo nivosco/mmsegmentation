@@ -1,5 +1,6 @@
 import mmcv
 import torch.nn as nn
+import torch
 from mmcv.cnn import ConvModule
 
 from .make_divisible import make_divisible
@@ -34,7 +35,7 @@ class SELayer(nn.Module):
             act_cfg = (act_cfg, act_cfg)
         assert len(act_cfg) == 2
         assert mmcv.is_tuple_of(act_cfg, dict)
-        self.global_avgpool = nn.AdaptiveAvgPool2d(1)
+        self.global_avgpool = None #nn.AdaptiveAvgPool2d(1)
         self.conv1 = ConvModule(
             in_channels=channels,
             out_channels=make_divisible(channels // ratio, 8),
@@ -51,7 +52,10 @@ class SELayer(nn.Module):
             act_cfg=act_cfg[1])
 
     def forward(self, x):
+        _, c, h, w = x.shape
+        self.global_avgpool = nn.AvgPool2d((7,w), stride=(7,w), ceil_mode=True)
         out = self.global_avgpool(x)
         out = self.conv1(out)
         out = self.conv2(out)
+        out = torch.repeat_interleave(out, 7, dim=-2)[:,:,:int(x.shape[-2]),:]
         return x * out
